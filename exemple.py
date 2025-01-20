@@ -1,5 +1,8 @@
-import mysql.connector
+import tkinter as tk
+from tkinter import messagebox, simpledialog
 
+
+# --- Gestion des contacts ---
 class Contact:
     def __init__(self, nom, prenom, email, telephone):
         self.nom = nom
@@ -10,131 +13,203 @@ class Contact:
     def __str__(self):
         return f"Nom: {self.nom}, Prénom: {self.prenom}, Email: {self.email}, Téléphone: {self.telephone}"
 
-
 class GestionnaireContact:
-    def __init__(self, host="localhost", user="root", password="", database="gestion_contacts"):
-        self.conn = mysql.connector.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=database
-        )
-        self.cursor = self.conn.cursor()
-        self._creer_table()
-
-    def _creer_table(self):
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS contacts (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                nom VARCHAR(255) NOT NULL,
-                prenom VARCHAR(255) NOT NULL,
-                email VARCHAR(255) NOT NULL,
-                telephone VARCHAR(20) NOT NULL
-            )
-        ''')
-        self.conn.commit()
+    def __init__(self):
+        self.contacts = []
+        self.charger_contacts()
 
     def ajouter_contact(self, contact):
-        self.cursor.execute(
-            "INSERT INTO contacts (nom, prenom, email, telephone) VALUES (%s, %s, %s, %s)",
-            (contact.nom, contact.prenom, contact.email, contact.telephone)
-        )
-        self.conn.commit()
+        self.contacts.append(contact)
+        self.sauvegarder_contacts()
 
     def afficher_contacts(self):
-        self.cursor.execute("SELECT nom, prenom, email, telephone FROM contacts")
-        contacts = self.cursor.fetchall()
-        if not contacts:
-            print("Aucun contact à afficher.")
-        else:
-            for c in contacts:
-                print(Contact(*c))
+        return "\n".join([str(contact) for contact in self.contacts])
 
     def rechercher_contact(self, nom):
-        self.cursor.execute("SELECT nom, prenom, email, telephone FROM contacts WHERE nom = %s", (nom,))
-        contacts = self.cursor.fetchall()
-        return [Contact(*c) for c in contacts]
+        resultat = [contact for contact in self.contacts if contact.nom.lower() == nom.lower()]
+        return resultat
 
     def modifier_contact(self, nom, nouveau_contact):
-        self.cursor.execute(
-            "UPDATE contacts SET prenom = %s, email = %s, telephone = %s WHERE nom = %s",
-            (nouveau_contact.prenom, nouveau_contact.email, nouveau_contact.telephone, nom)
-        )
-        self.conn.commit()
-        return self.cursor.rowcount > 0
+        for idx, contact in enumerate(self.contacts):
+            if contact.nom.lower() == nom.lower():
+                self.contacts[idx] = nouveau_contact
+                self.sauvegarder_contacts()
+                return True
+        return False
 
     def supprimer_contact(self, nom):
-        self.cursor.execute("DELETE FROM contacts WHERE nom = %s", (nom,))
-        self.conn.commit()
-        return self.cursor.rowcount > 0
+        for contact in self.contacts:
+            if contact.nom.lower() == nom.lower():
+                self.contacts.remove(contact)
+                self.sauvegarder_contacts()
+                return True
+        return False
 
-    def __del__(self):
-        self.conn.close()
+    def sauvegarder_contacts(self):
+        with open('contacts.txt', 'w') as file:
+            for contact in self.contacts:
+                file.write(f"{contact.nom},{contact.prenom},{contact.email},{contact.telephone}\n")
+
+    def charger_contacts(self):
+        try:
+            with open('contacts.txt', 'r') as file:
+                for line in file:
+                    nom, prenom, email, telephone = line.strip().split(',')
+                    contact = Contact(nom, prenom, email, telephone)
+                    self.contacts.append(contact)
+        except FileNotFoundError:
+            pass
 
 
-class Main:
-    @staticmethod
-    def main():
-        gestionnaire = GestionnaireContact()
+# --- Interface graphique ---
+class MainWindow:
+    def __init__(self, root, gestionnaire):
+        self.root = root
+        self.gestionnaire = gestionnaire
+        self.root.title("Gestionnaire de Contacts")
+        self.root.geometry("600x500")
 
-        while True:
-            print("\nMenu :")
-            print("1. Ajouter un contact")
-            print("2. Afficher tous les contacts")
-            print("3. Rechercher un contact")
-        
-            print("4. Modifier un contact")
-            print("5. Supprimer un contact")
-            print("6. Quitter")
+        # --- Ajouter un contact ---
+        self.add_frame = tk.LabelFrame(root, text="Ajouter un contact", padx=20, pady=20)
+        self.add_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
-            choix = input("Choisissez une option : ")
+        # Champs pour ajouter un contact
+        self.nom_label = tk.Label(self.add_frame, text="Nom:")
+        self.nom_label.grid(row=0, column=0, pady=5, padx=10)
+        self.nom_entry = tk.Entry(self.add_frame)
+        self.nom_entry.grid(row=0, column=1, pady=5, padx=10)
 
-            if choix == "1":
-                nom = input("Nom : ")
-                prenom = input("Prénom : ")
-                email = input("Email : ")
-                telephone = input("Téléphone : ")
-                contact = Contact(nom, prenom, email, telephone)
-                gestionnaire.ajouter_contact(contact)
-                print("Contact ajouté avec succès.")
+        self.prenom_label = tk.Label(self.add_frame, text="Prénom:")
+        self.prenom_label.grid(row=1, column=0, pady=5, padx=10)
+        self.prenom_entry = tk.Entry(self.add_frame)
+        self.prenom_entry.grid(row=1, column=1, pady=5, padx=10)
 
-            elif choix == "2":
-                gestionnaire.afficher_contacts()
+        self.email_label = tk.Label(self.add_frame, text="Email:")
+        self.email_label.grid(row=2, column=0, pady=5, padx=10)
+        self.email_entry = tk.Entry(self.add_frame)
+        self.email_entry.grid(row=2, column=1, pady=5, padx=10)
 
-            elif choix == "3":
-                nom = input("Entrez le nom à rechercher : ")
-                resultat = gestionnaire.rechercher_contact(nom)
-                if resultat:
-                    for contact in resultat:
-                        print(contact)
-                else:
-                    print("Aucun contact trouvé avec ce nom.")
+        self.telephone_label = tk.Label(self.add_frame, text="Téléphone:")
+        self.telephone_label.grid(row=3, column=0, pady=5, padx=10)
+        self.telephone_entry = tk.Entry(self.add_frame)
+        self.telephone_entry.grid(row=3, column=1, pady=5, padx=10)
 
-            elif choix == "4":
-                nom = input("Entrez le nom du contact à modifier : ")
-                prenom = input("Nouveau prénom : ")
-                email = input("Nouvel email : ")
-                telephone = input("Nouveau téléphone : ")
-                nouveau_contact = Contact(nom, prenom, email, telephone)
-                if gestionnaire.modifier_contact(nom, nouveau_contact):
-                    print("Contact modifié avec succès.")
-                else:
-                    print("Aucun contact trouvé avec ce nom.")
+        # Bouton pour ajouter un contact
+        self.add_button = tk.Button(self.add_frame, text="Ajouter un contact", command=self.ajouter_contact)
+        self.add_button.grid(row=4, column=0, columnspan=2, pady=10)
 
-            elif choix == "5":
-                nom = input("Entrez le nom du contact à supprimer : ")
-                if gestionnaire.supprimer_contact(nom):
-                    print("Contact supprimé avec succès.")
-                else:
-                    print("Aucun contact trouvé avec ce nom.")
+        # --- Affichage des contacts ---
+        self.view_frame = tk.LabelFrame(root, text="Contacts enregistrés", padx=20, pady=20)
+        self.view_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
-            elif choix == "6":
-                print("Au revoir !")
-                break
+        # Liste des contacts
+        self.contact_listbox = tk.Listbox(self.view_frame, height=10, width=50)
+        self.contact_listbox.grid(row=0, column=0, columnspan=2, pady=10)
 
+        # --- Actions (rechercher, modifier, supprimer) ---
+        self.action_frame = tk.LabelFrame(root, text="Actions", padx=20, pady=20)
+        self.action_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Boutons d'action
+        self.view_button = tk.Button(self.action_frame, text="Afficher les contacts", command=self.afficher_contacts)
+        self.view_button.grid(row=0, column=0, pady=5)
+
+        self.search_button = tk.Button(self.action_frame, text="Rechercher un contact", command=self.rechercher_contact)
+        self.search_button.grid(row=0, column=1, pady=5)
+
+        self.modify_button = tk.Button(self.action_frame, text="Modifier un contact", command=self.modifier_contact)
+        self.modify_button.grid(row=1, column=0, pady=5)
+
+        self.delete_button = tk.Button(self.action_frame, text="Supprimer un contact", command=self.supprimer_contact)
+        self.delete_button.grid(row=1, column=1, pady=5)
+
+        # Bouton Quitter
+        self.quit_button = tk.Button(root, text="Quitter", command=root.quit)
+        self.quit_button.grid(row=3, column=0, columnspan=2, pady=10)
+
+    def ajouter_contact(self):
+        nom = self.nom_entry.get()
+        prenom = self.prenom_entry.get()
+        email = self.email_entry.get()
+        telephone = self.telephone_entry.get()
+
+        if nom and prenom and email and telephone:
+            contact = Contact(nom, prenom, email, telephone)
+            self.gestionnaire.ajouter_contact(contact)
+            messagebox.showinfo("Succès", "Contact ajouté avec succès.")
+            self.afficher_contacts()
+
+            # Vider les champs de saisie après ajout
+            self.nom_entry.delete(0, tk.END)
+            self.prenom_entry.delete(0, tk.END)
+            self.email_entry.delete(0, tk.END)
+            self.telephone_entry.delete(0, tk.END)
+        else:
+            messagebox.showwarning("Erreur", "Tous les champs sont requis.")
+
+    def afficher_contacts(self):
+        self.contact_listbox.delete(0, tk.END)
+        contacts = self.gestionnaire.afficher_contacts()
+        if contacts:
+            self.contact_listbox.insert(tk.END, contacts)
+        else:
+            messagebox.showinfo("Info", "Aucun contact à afficher.")
+
+    def rechercher_contact(self):
+        nom = simpledialog.askstring("Recherche", "Entrez le nom à rechercher:")
+        if nom:
+            resultat = self.gestionnaire.rechercher_contact(nom)
+            if resultat:
+                self.contact_listbox.delete(0, tk.END)
+                for contact in resultat:
+                    self.contact_listbox.insert(tk.END, contact)
             else:
-                print("Option invalide, veuillez réessayer.")
+                messagebox.showinfo("Info", "Aucun contact trouvé avec ce nom.")
+        else:
+            messagebox.showwarning("Erreur", "Veuillez entrer un nom.")
 
+    def modifier_contact(self):
+        nom = simpledialog.askstring("Modifier", "Entrez le nom du contact à modifier:")
+        if nom:
+            contact = simpledialog.askstring("Nouveau Contact", "Entrez les nouvelles informations (Nom, Prénom, Email, Téléphone) séparées par des virgules:")
+            if contact:
+                try:
+                    nom, prenom, email, telephone = contact.split(',')
+                    nouveau_contact = Contact(nom.strip(), prenom.strip(), email.strip(), telephone.strip())
+                    if self.gestionnaire.modifier_contact(nom, nouveau_contact):
+                        messagebox.showinfo("Succès", "Contact modifié avec succès.")
+                        self.afficher_contacts()
+                    else:
+                        messagebox.showinfo("Info", "Aucun contact trouvé avec ce nom.")
+                except ValueError:
+                    messagebox.showwarning("Erreur", "Le format des informations est incorrect.")
+        else:
+            messagebox.showwarning("Erreur", "Veuillez entrer un nom.")
+
+    def supprimer_contact(self):
+        nom = simpledialog.askstring("Supprimer", "Entrez le nom du contact à supprimer:")
+        if nom:
+            if self.gestionnaire.supprimer_contact(nom):
+                messagebox.showinfo("Succès", "Contact supprimé avec succès.")
+                self.afficher_contacts()
+            else:
+                messagebox.showinfo("Info", "Aucun contact trouvé avec ce nom.")
+        else:
+            messagebox.showwarning("Erreur", "Veuillez entrer un nom.")
+
+
+# --- Programme principal ---
+def main():
+    gestionnaire = GestionnaireContact()
+
+    # Création de la fenêtre principale Tkinter
+    root = tk.Tk()
+
+    # Initialisation de l'interface graphique
+    window = MainWindow(root, gestionnaire)
+
+    # Lancement de l'interface
+    root.mainloop()
 
 if __name__ == "__main__":
-    Main.main()
+    main()
